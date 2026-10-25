@@ -1,0 +1,6 @@
+{
+  "name": "PressDaily",
+  "description": "Daily medication, supplement, and habit tracking powered by the PressDaily routine engine.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
