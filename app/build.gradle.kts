@@ -4,11 +4,11 @@ plugins {
 }
 
 android {
-    namespace = "com.example.pillpulse"
+    namespace = "com.example.pressdaily"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.aistudio.pillpulse.qzvtrk"
+        applicationId = "com.aistudio.pressdaily.qzvtrk"
         minSdk = 26
         targetSdk = 36
         versionCode = 1
