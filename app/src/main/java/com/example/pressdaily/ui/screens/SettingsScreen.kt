@@ -1,7 +1,9 @@
 package com.example.pressdaily.ui.screens
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -28,8 +30,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.Alarm
 import androidx.compose.material.icons.filled.Check
+import com.example.pressdaily.ui.components.TimePickerHelper
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.FormatSize
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
@@ -631,7 +635,10 @@ fun SettingsScreen(
                                         horizontalArrangement = Arrangement.SpaceBetween,
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier.weight(1f)
+                                        ) {
                                             Icon(
                                                 imageVector = if (option == AlarmSoundOption.VIBRATE_ONLY) Icons.Default.Vibration
                                                 else if (option == AlarmSoundOption.SILENT) Icons.Default.Notifications
@@ -641,21 +648,44 @@ fun SettingsScreen(
                                                 modifier = Modifier.size(18.dp)
                                             )
                                             Spacer(modifier = Modifier.width(10.dp))
-                                            Text(
-                                                text = option.label,
-                                                fontSize = 13.sp,
-                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                                color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-                                            )
+                                            Column {
+                                                Text(
+                                                    text = option.label,
+                                                    fontSize = 13.sp,
+                                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                                )
+                                                if (option.description.isNotEmpty()) {
+                                                    Text(
+                                                        text = option.description,
+                                                        fontSize = 11.sp,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                    )
+                                                }
+                                            }
                                         }
 
-                                        if (isSelected) {
-                                            Icon(
-                                                imageVector = Icons.Default.Check,
-                                                contentDescription = "Selected",
-                                                tint = MaterialTheme.colorScheme.primary,
-                                                modifier = Modifier.size(18.dp)
-                                            )
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            IconButton(
+                                                onClick = { viewModel.playSoundPreview(option) },
+                                                modifier = Modifier.size(28.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.PlayArrow,
+                                                    contentDescription = "Test ${option.label}",
+                                                    tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                            }
+                                            if (isSelected) {
+                                                Spacer(modifier = Modifier.width(4.dp))
+                                                Icon(
+                                                    imageVector = Icons.Default.Check,
+                                                    contentDescription = "Selected",
+                                                    tint = MaterialTheme.colorScheme.primary,
+                                                    modifier = Modifier.size(18.dp)
+                                                )
+                                            }
                                         }
                                     }
                                 }
@@ -815,7 +845,11 @@ fun SettingsScreen(
                                         fontSize = 14.sp
                                     )
                                     Text(
-                                        text = "Mute chimes between ${settings.quietHoursStart} and ${settings.quietHoursEnd}",
+                                        text = if (settings.quietHoursEnabled) {
+                                            "Mute chimes between ${TimePickerHelper.formatDisplayTime(settings.quietHoursStart)} and ${TimePickerHelper.formatDisplayTime(settings.quietHoursEnd)}"
+                                        } else {
+                                            "Mute audio alerts during sleep or resting hours"
+                                        },
                                         fontSize = 12.sp,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
@@ -827,6 +861,206 @@ fun SettingsScreen(
                                     }
                                 )
                             }
+
+                            if (settings.quietHoursEnabled) {
+                                Spacer(modifier = Modifier.height(14.dp))
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    // Start Time Picker Card
+                                    Card(
+                                        shape = RoundedCornerShape(12.dp),
+                                        colors = CardDefaults.cardColors(
+                                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
+                                        ),
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .clickable {
+                                                TimePickerHelper.showClockTimePicker(context, settings.quietHoursStart) { newTime ->
+                                                    viewModel.updateSettings(settings.copy(quietHoursStart = newTime))
+                                                }
+                                            }
+                                            .testTag("quiet_hours_start_card")
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(10.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.AccessTime,
+                                                contentDescription = "Clock",
+                                                tint = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Column {
+                                                Text(
+                                                    text = "Mute Starts",
+                                                    fontSize = 11.sp,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                                Text(
+                                                    text = TimePickerHelper.formatDisplayTime(settings.quietHoursStart),
+                                                    fontSize = 14.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = MaterialTheme.colorScheme.onSurface
+                                                )
+                                            }
+                                        }
+                                    }
+
+                                    // End Time Picker Card
+                                    Card(
+                                        shape = RoundedCornerShape(12.dp),
+                                        colors = CardDefaults.cardColors(
+                                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
+                                        ),
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .clickable {
+                                                TimePickerHelper.showClockTimePicker(context, settings.quietHoursEnd) { newTime ->
+                                                    viewModel.updateSettings(settings.copy(quietHoursEnd = newTime))
+                                                }
+                                            }
+                                            .testTag("quiet_hours_end_card")
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(10.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.AccessTime,
+                                                contentDescription = "Clock",
+                                                tint = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Column {
+                                                Text(
+                                                    text = "Mute Ends",
+                                                    fontSize = 11.sp,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                                Text(
+                                                    text = TimePickerHelper.formatDisplayTime(settings.quietHoursEnd),
+                                                    fontSize = 14.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = MaterialTheme.colorScheme.onSurface
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Next Alarm Diagnostic Card
+                item {
+                    val nextAlarmInfo = remember(settings) {
+                        com.example.pressdaily.notification.MedicationScheduler.getNextUpcomingAlarmInfo(context)
+                    }
+                    Card(
+                        shape = RoundedCornerShape(18.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
+                        ),
+                        modifier = Modifier.fillMaxWidth().testTag("next_alarm_diagnostic_card")
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.Alarm,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Column {
+                                    Text(
+                                        text = "System Alarm Clock Status",
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 15.sp,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Text(
+                                        text = if (nextAlarmInfo != null) "Next scheduled: $nextAlarmInfo" else "No upcoming reminder times set",
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "Registered directly with Android AlarmManager with WakeLock & Doze bypass to ensure morning and overnight reminders trigger on time.",
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+
+                // Android 14+ Full-Screen Permission Warning Card
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                    val notifManager = context.getSystemService(android.app.NotificationManager::class.java)
+                    val canUseFullScreen = notifManager?.canUseFullScreenIntent() ?: true
+                    if (!canUseFullScreen) {
+                        item {
+                            Card(
+                                shape = RoundedCornerShape(18.dp),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.6f)
+                                ),
+                                modifier = Modifier.fillMaxWidth().testTag("grant_full_screen_permission_card")
+                            ) {
+                                Column(modifier = Modifier.padding(16.dp)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            imageVector = Icons.Default.Security,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.error,
+                                            modifier = Modifier.size(24.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(10.dp))
+                                        Column {
+                                            Text(
+                                                text = "Full-Screen Alarm Permission Needed",
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 15.sp,
+                                                color = MaterialTheme.colorScheme.onErrorContainer
+                                            )
+                                            Text(
+                                                text = "Required on Android 14+ to display full-screen",
+                                                fontSize = 12.sp,
+                                                color = MaterialTheme.colorScheme.error
+                                            )
+                                        }
+                                    }
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Text(
+                                        text = "Without this permission, Android demotes full-screen alarms to a small notification banner. Tap below to enable full-screen alarms in system settings.",
+                                        fontSize = 12.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Spacer(modifier = Modifier.height(12.dp))
+                                    Button(
+                                        onClick = {
+                                            val intent = Intent(android.provider.Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT).apply {
+                                                data = android.net.Uri.parse("package:${context.packageName}")
+                                            }
+                                            context.startActivity(intent)
+                                        },
+                                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                                        shape = RoundedCornerShape(12.dp),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text("Allow Full-Screen Alarms in Settings", fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -836,9 +1070,6 @@ fun SettingsScreen(
                     Button(
                         onClick = {
                             viewModel.triggerLiveDoseAlert()
-                            if (settings.notificationStyle == NotificationStyle.BOTH || settings.notificationStyle == NotificationStyle.FULL_SCREEN) {
-                                showTestAlarmDialog = true
-                            }
                             if (settings.notificationStyle == NotificationStyle.HEADS_UP) {
                                 Toast.makeText(
                                     context,
@@ -859,6 +1090,29 @@ fun SettingsScreen(
                         Text("Simulate Live Dose Alert", fontWeight = FontWeight.Bold, fontSize = 15.sp)
                     }
                 }
+
+                // Reschedule all active alarms button
+                item {
+                    OutlinedButton(
+                        onClick = {
+                            com.example.pressdaily.notification.MedicationScheduler.scheduleAllAlarms(context)
+                            Toast.makeText(
+                                context,
+                                "⏰ All medication alarms synced & active with Android AlarmManager!",
+                                Toast.LENGTH_LONG
+                            ).show()
+                        },
+                        shape = RoundedCornerShape(14.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp)
+                            .testTag("reschedule_alarms_button")
+                    ) {
+                        Icon(Icons.Default.Alarm, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Sync & Verify System Alarms", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                    }
+                }
             }
 
             // About PressDaily
@@ -877,6 +1131,13 @@ fun SettingsScreen(
                             fontWeight = FontWeight.Bold,
                             fontSize = 15.sp,
                             color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "Version 2.1.6",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.primary
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(

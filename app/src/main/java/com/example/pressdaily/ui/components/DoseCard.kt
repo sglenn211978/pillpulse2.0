@@ -16,8 +16,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Undo
+import androidx.compose.material.icons.filled.Alarm
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Info
@@ -59,6 +61,7 @@ fun DoseCard(
     onTake: () -> Unit,
     onSkip: () -> Unit,
     onUndo: (String) -> Unit,
+    onReschedule: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val med = item.medication
@@ -147,21 +150,40 @@ fun DoseCard(
                     }
                 }
 
-                // Scheduled Time Badge
+                // Scheduled Time Badge (Clickable to Reschedule / Push Out)
                 Box(
                     modifier = Modifier
                         .background(
-                            MaterialTheme.colorScheme.surfaceVariant,
+                            if (item.isRescheduledForToday) MaterialTheme.colorScheme.tertiaryContainer
+                            else MaterialTheme.colorScheme.surfaceVariant,
                             RoundedCornerShape(10.dp)
                         )
+                        .border(
+                            width = if (item.isRescheduledForToday) 1.dp else 0.dp,
+                            color = if (item.isRescheduledForToday) MaterialTheme.colorScheme.tertiary else Color.Transparent,
+                            shape = RoundedCornerShape(10.dp)
+                        )
+                        .clickable { onReschedule() }
                         .padding(horizontal = 10.dp, vertical = 6.dp)
                 ) {
-                    Text(
-                        text = item.scheduledTime,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (item.isRescheduledForToday) {
+                            Icon(
+                                imageVector = Icons.Default.Alarm,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onTertiaryContainer,
+                                modifier = Modifier.size(13.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                        }
+                        Text(
+                            text = item.scheduledTime,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (item.isRescheduledForToday) MaterialTheme.colorScheme.onTertiaryContainer
+                                   else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
             }
 
@@ -278,7 +300,41 @@ fun DoseCard(
                 }
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            if (item.isRescheduledForToday) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.5f))
+                        .clickable { onReschedule() }
+                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.Alarm,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.tertiary,
+                            modifier = Modifier.size(15.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "Pushed to ${item.scheduledTime} today (was ${item.originalScheduledTime})",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onTertiaryContainer
+                        )
+                    }
+                    Text(
+                        text = "Change ›",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.tertiary
+                    )
+                }
+                Spacer(modifier = Modifier.height(10.dp))
+            }
 
             // Action Row
             when (item.status) {
@@ -296,7 +352,7 @@ fun DoseCard(
                             ),
                             shape = RoundedCornerShape(12.dp),
                             modifier = Modifier
-                                .weight(1f)
+                                .weight(1.3f)
                                 .height(44.dp)
                                 .testTag("take_button_${med.id}_${item.scheduledTime}")
                         ) {
@@ -310,6 +366,28 @@ fun DoseCard(
                         }
 
                         OutlinedButton(
+                            onClick = onReschedule,
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier
+                                .weight(1.2f)
+                                .height(44.dp)
+                                .testTag("reschedule_button_${med.id}_${item.scheduledTime}")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Alarm,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = if (item.isRescheduledForToday) "Rescheduled" else "Snooze",
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 13.sp
+                            )
+                        }
+
+                        OutlinedButton(
                             onClick = onSkip,
                             shape = RoundedCornerShape(12.dp),
                             modifier = Modifier
@@ -318,15 +396,9 @@ fun DoseCard(
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Close,
-                                contentDescription = null,
+                                contentDescription = "Skip dose",
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                "Skip",
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                fontWeight = FontWeight.Medium
                             )
                         }
                     }

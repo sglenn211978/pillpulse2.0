@@ -22,9 +22,13 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.ui.platform.LocalContext
+import com.example.pressdaily.ui.components.TimePickerHelper
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -67,6 +71,7 @@ fun AddEditMedicationScreen(
     modifier: Modifier = Modifier
 ) {
     BackHandler { onNavigateBack() }
+    val context = LocalContext.current
 
     var name by remember { mutableStateOf(initialMedication?.name ?: "") }
     var dosage by remember { mutableStateOf(initialMedication?.dosage ?: "") }
@@ -200,28 +205,150 @@ fun AddEditMedicationScreen(
                 }
             }
 
-            // Scheduled Times (if not PRN)
+            // Scheduled Times with Clock Picker (if not PRN)
             if (selectedFrequency != FrequencyType.AS_NEEDED) {
                 item {
-                    Text("Scheduled Times", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    Spacer(modifier = Modifier.height(8.dp))
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
+                        Column {
+                            Text(
+                                "Scheduled Reminder Times",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                "Tap any time or the clock icon to adjust with the clock picker",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         scheduledTimes.forEachIndexed { index, time ->
-                            Box(
+                            Card(
+                                shape = RoundedCornerShape(14.dp),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+                                ),
                                 modifier = Modifier
-                                    .background(PulseTeal.copy(alpha = 0.15f), RoundedCornerShape(10.dp))
-                                    .padding(horizontal = 12.dp, vertical = 8.dp)
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        TimePickerHelper.showClockTimePicker(context, time) { newTime ->
+                                            val updated = scheduledTimes.toMutableList()
+                                            updated[index] = newTime
+                                            scheduledTimes = updated.sorted()
+                                        }
+                                    }
+                                    .testTag("time_chip_$index")
                             ) {
-                                Text(
-                                    text = time,
-                                    fontWeight = FontWeight.Bold,
-                                    color = PulseTeal,
-                                    fontSize = 14.sp
-                                )
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 14.dp, vertical = 10.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(36.dp)
+                                                .background(PulseTeal.copy(alpha = 0.15f), CircleShape),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.AccessTime,
+                                                contentDescription = "Clock",
+                                                tint = PulseTeal,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.width(12.dp))
+                                        Column {
+                                            Text(
+                                                text = TimePickerHelper.formatDisplayTime(time),
+                                                fontSize = 16.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.onSurface
+                                            )
+                                            Text(
+                                                text = "24h: $time • Tap to change with clock",
+                                                fontSize = 11.sp,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    }
+
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        IconButton(
+                                            onClick = {
+                                                TimePickerHelper.showClockTimePicker(context, time) { newTime ->
+                                                    val updated = scheduledTimes.toMutableList()
+                                                    updated[index] = newTime
+                                                    scheduledTimes = updated.sorted()
+                                                }
+                                            },
+                                            modifier = Modifier.size(32.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Edit,
+                                                contentDescription = "Edit time with clock",
+                                                tint = PulseTeal,
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                        }
+
+                                        if (scheduledTimes.size > 1) {
+                                            IconButton(
+                                                onClick = {
+                                                    val updated = scheduledTimes.toMutableList()
+                                                    updated.removeAt(index)
+                                                    scheduledTimes = updated
+                                                },
+                                                modifier = Modifier.size(32.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Close,
+                                                    contentDescription = "Remove reminder time",
+                                                    tint = MaterialTheme.colorScheme.error,
+                                                    modifier = Modifier.size(18.dp)
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
                             }
+                        }
+
+                        // Add Custom Time with Clock Button
+                        Button(
+                            onClick = {
+                                TimePickerHelper.showClockTimePicker(context, "08:00") { newTime ->
+                                    if (!scheduledTimes.contains(newTime)) {
+                                        scheduledTimes = (scheduledTimes + newTime).sorted()
+                                    }
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = PulseTeal.copy(alpha = 0.15f),
+                                contentColor = PulseTeal
+                            ),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(46.dp)
+                                .testTag("add_time_clock_button")
+                        ) {
+                            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Icon(Icons.Default.AccessTime, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Select Time with Clock (+ Add Reminder)", fontWeight = FontWeight.Bold, fontSize = 13.sp)
                         }
                     }
                 }

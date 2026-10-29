@@ -6,8 +6,8 @@ PressDaily is a daily habit, routine, and medication tracking application built 
 
 - **Daily Medication Pulse & Adherence**:
   - Real-time animated circular pulse meter reflecting daily adherence.
-  - Adherence streak tracker celebrating consistent regimen management.
   - Interactive 7-day horizontal calendar strip for reviewing scheduled doses across any date.
+  - Visual completion status and real-time adherence progress.
 
 - **Intelligent Dose Scheduling & Action Logging**:
   - One-tap dose logging (`Take Dose`, `Skip Dose` with reason recording, and `Undo`).
@@ -23,7 +23,7 @@ PressDaily is a daily habit, routine, and medication tracking application built 
 
 - **Alarm & Medication Reminders**:
   - Master toggle for dose alarms and notification chimes.
-  - Audio chime picker with live test preview (*Gentle Chime*, *Pulse Bell*, *Digital Beep*, *Radiant Alarm*, *Vibrate Only*, *Silent*).
+  - 16 custom ringtones with live preview (*Gentle Chime*, *Pulse Bell*, *Warm Espresso*, *Digital Beep*, *Radiant Alarm*, *Soft Melodic*, *Quick Chirp*, *Morning Sunrise*, *Zen Bell*, *Echo Pulse*, *Subtle Ping*, *Deep Resonant*, *System Notification*, *System Alarm*, *Vibrate Only*, *Silent*).
   - Configurable advance notice (at exact time, 5m, 10m, 15m, 30m early).
   - Customizable snooze durations (5m, 10m, 15m, 20m, 30m).
   - Persistent escalation (repeat chime every 5 minutes until dose confirmation).

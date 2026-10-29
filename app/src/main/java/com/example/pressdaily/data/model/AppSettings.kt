@@ -17,13 +17,34 @@ enum class AccentTheme(val label: String, val primaryColorHex: Long, val seconda
     BLUE("Cobalt Blue", 0xFF2563EB, 0xFF60A5FA)
 }
 
-enum class AlarmSoundOption(val label: String, val toneId: Int) {
-    GENTLE_CHIME("Gentle Chime", 24),
-    PULSE_BELL("Pulse Bell", 28),
-    DIGITAL_BEEP("Digital Beep", 2),
-    ALARM_BUZZ("Radiant Alarm", 96),
-    VIBRATE_ONLY("Vibrate Only", -1),
-    SILENT("Silent", -2)
+enum class SoundType {
+    SYSTEM_ALARM,
+    SYSTEM_RINGTONE,
+    SYSTEM_NOTIFICATION,
+    MELODY_ESPRESSO,
+    MELODY_SUNRISE,
+    MELODY_ZEN,
+    MELODY_HARP,
+    MELODY_ALARM,
+    VIBRATE,
+    SILENT
+}
+
+enum class AlarmSoundOption(
+    val label: String,
+    val soundType: SoundType,
+    val description: String
+) {
+    SYSTEM_ALARM("System Alarm Ringtone", SoundType.SYSTEM_ALARM, "Full device alarm ringtone (urgent waking sound)"),
+    SYSTEM_RINGTONE("Phone Call Ringtone", SoundType.SYSTEM_RINGTONE, "Standard phone call ringtone melody"),
+    SYSTEM_NOTIFICATION("System Notification Chime", SoundType.SYSTEM_NOTIFICATION, "Quick default device notification alert"),
+    WARM_ESPRESSO("Warm Espresso Melody", SoundType.MELODY_ESPRESSO, "Acoustic ascending marimba chords"),
+    MORNING_SUNRISE("Morning Sunrise Chime", SoundType.MELODY_SUNRISE, "Bright acoustic arpeggio bell tones"),
+    ZEN_TEMPLE("Zen Temple Bell", SoundType.MELODY_ZEN, "Deep resonant Tibetan singing bowl chime"),
+    VIBRANT_HARP("Vibrant Harp Chords", SoundType.MELODY_HARP, "Gentle multi-chord soothing harp melody"),
+    CLASSIC_ALARM("Classic Urgent Alarm", SoundType.MELODY_ALARM, "High-attention pulsating dual chime"),
+    VIBRATE_ONLY("Vibrate Only", SoundType.VIBRATE, "Continuous haptic vibration pattern with no audio"),
+    SILENT("Silent", SoundType.SILENT, "Visual notification only (no sound or vibration)")
 }
 
 enum class NotificationStyle(val label: String, val description: String) {
@@ -42,7 +63,7 @@ data class AppSettings(
     // Alarm & Reminder settings
     val alarmsEnabled: Boolean = true,
     val notificationStyle: NotificationStyle = NotificationStyle.BOTH,
-    val alarmSound: AlarmSoundOption = AlarmSoundOption.GENTLE_CHIME,
+    val alarmSound: AlarmSoundOption = AlarmSoundOption.SYSTEM_ALARM,
     val vibrateOnAlarm: Boolean = true,
     val advanceNoticeMinutes: Int = 0,
     val snoozeDurationMinutes: Int = 10,

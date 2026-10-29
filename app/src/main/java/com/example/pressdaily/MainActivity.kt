@@ -57,6 +57,8 @@ import com.example.pressdaily.ui.screens.CabinetScreen
 import com.example.pressdaily.ui.screens.PulseHistoryScreen
 import com.example.pressdaily.ui.screens.SettingsScreen
 import com.example.pressdaily.ui.screens.TodayScreen
+import com.example.pressdaily.notification.MedicationScheduler
+import com.example.pressdaily.notification.RingtonePreferences
 import com.example.pressdaily.ui.theme.PressDailyTheme
 import com.example.pressdaily.ui.theme.PulseCoral
 import com.example.pressdaily.ui.viewmodel.MedicationViewModel
@@ -75,6 +77,12 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+
+        // Apply persisted ringtone choice to system notification channel across application restarts
+        RingtonePreferences.applyRingtoneToNotificationChannel(this)
+
+        // Schedule all medication reminder alarms with AlarmManager
+        MedicationScheduler.scheduleAllAlarms(this)
 
         setContent {
             val appSettings by viewModel.appSettings.collectAsStateWithLifecycle()

@@ -56,27 +56,36 @@ class MedicationViewModel(application: Application) : AndroidViewModel(applicati
     val scheduledDoses: StateFlow<List<ScheduledDoseItem>> = combine(
         medications,
         doseLogs,
-        _selectedDateKey
-    ) { meds, logs, dateKey ->
+        _selectedDateKey,
+        repository.rescheduledDoses
+    ) { meds, logs, dateKey, rescheduledMap ->
         val result = mutableListOf<ScheduledDoseItem>()
         val scheduledMeds = meds.filter { it.isActive && it.frequency != FrequencyType.AS_NEEDED }
 
         scheduledMeds.forEach { med ->
-            med.scheduledTimes.forEach { time ->
+            med.scheduledTimes.forEach { originalTime ->
+                val rescheduledTime = rescheduledMap["${dateKey}_${med.id}_${originalTime}"]
+                val isRescheduled = rescheduledTime != null && rescheduledTime != originalTime
+                val effectiveTime = rescheduledTime ?: originalTime
+
                 val matchingLog = logs.find {
-                    it.medicationId == med.id && it.scheduledTime == time && it.dayKey == dateKey
+                    it.medicationId == med.id &&
+                    (it.scheduledTime == originalTime || it.scheduledTime == effectiveTime) &&
+                    it.dayKey == dateKey
                 }
                 result.add(
                     ScheduledDoseItem(
                         medication = med,
-                        scheduledTime = time,
+                        scheduledTime = effectiveTime,
                         status = matchingLog?.status,
-                        logId = matchingLog?.id
+                        logId = matchingLog?.id,
+                        originalScheduledTime = originalTime,
+                        isRescheduledForToday = isRescheduled
                     )
                 )
             }
         }
-        // Sort by scheduled time string (e.g., "08:00", "12:30", "19:00", "22:00")
+        // Sort by effective scheduled time string (e.g., "08:00", "09:30", "19:00")
         result.sortedBy { it.scheduledTime }
     }.stateIn(
         scope = viewModelScope,
@@ -189,7 +198,6 @@ class MedicationViewModel(application: Application) : AndroidViewModel(applicati
 
         sb.append("📊 ADHERENCE OVERVIEW\n")
         sb.append("• 7-Day Adherence Score: ${stats.weeklyPercentage}%\n")
-        sb.append("• Current Adherence Streak: ${stats.currentStreakDays} days\n")
         sb.append("• Total Doses Logged: ${stats.totalDosesLogged}\n\n")
 
         sb.append("💊 ACTIVE PRESCRIPTION & MEDICINE CABINET (${meds.size} total)\n")
@@ -251,5 +259,22 @@ class MedicationViewModel(application: Application) : AndroidViewModel(applicati
             instructions = instructions,
             remainingSupply = remainingSupply
         )
+    }
+
+    fun rescheduleDoseForDay(
+        medicationId: String,
+        originalTime: String,
+        newTime: String,
+        dayKey: String = repository.getTodayKey()
+    ) {
+        repository.rescheduleDoseForDay(medicationId, originalTime, newTime, dayKey)
+    }
+
+    fun resetRescheduledDose(
+        medicationId: String,
+        originalTime: String,
+        dayKey: String = repository.getTodayKey()
+    ) {
+        repository.resetRescheduledDose(medicationId, originalTime, dayKey)
     }
 }

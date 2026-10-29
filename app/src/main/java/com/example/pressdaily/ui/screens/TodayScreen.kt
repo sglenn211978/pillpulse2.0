@@ -41,6 +41,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -48,9 +49,13 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.pressdaily.data.model.Medication
 import com.example.pressdaily.data.model.ScheduledDoseItem
+import com.example.pressdaily.notification.MedicationScheduler
+import android.widget.Toast
 import com.example.pressdaily.ui.components.DoseCard
 import com.example.pressdaily.ui.components.PulseHeroCard
 import com.example.pressdaily.ui.components.RefillAlertBanner
+import com.example.pressdaily.ui.components.RescheduleDoseDialog
+import com.example.pressdaily.ui.components.TimePickerHelper
 import com.example.pressdaily.ui.components.WeekCalendarStrip
 import com.example.pressdaily.ui.theme.PulseTeal
 import com.example.pressdaily.ui.viewmodel.MedicationViewModel
@@ -78,6 +83,7 @@ fun TodayScreen(
 
     var skippingItem by remember { mutableStateOf<ScheduledDoseItem?>(null) }
     var takingPrnMed by remember { mutableStateOf<Medication?>(null) }
+    var reschedulingItem by remember { mutableStateOf<ScheduledDoseItem?>(null) }
 
     val todayKey = remember { java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(java.util.Date()) }
     val isToday = selectedDateKey == todayKey
@@ -146,17 +152,27 @@ fun TodayScreen(
 
                     Spacer(modifier = Modifier.width(10.dp))
 
+                    val context = LocalContext.current
+                    val upcomingAlarm = remember(scheduledDoses, appSettings) {
+                        MedicationScheduler.getNextUpcomingAlarmInfo(context)
+                    }
+
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = if (appSettings.alarmsEnabled) "Alarms Active: ${appSettings.alarmSound.label}" else "Alarms Muted",
+                            text = if (appSettings.alarmsEnabled) {
+                                if (upcomingAlarm != null) "Next: $upcomingAlarm"
+                                else "Alarms Armed (${appSettings.alarmSound.label})"
+                            } else {
+                                "Alarms Muted"
+                            },
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
                             text = if (appSettings.alarmsEnabled) {
-                                if (appSettings.advanceNoticeMinutes > 0) "${appSettings.advanceNoticeMinutes}m early • Snooze ${appSettings.snoozeDurationMinutes}m"
-                                else "At exact dose times • Tap to customize"
+                                if (appSettings.advanceNoticeMinutes > 0) "${appSettings.advanceNoticeMinutes}m early • Alarm Clock Doze Bypass Active"
+                                else "Alarm Clock & Doze Bypass Active • Tap for settings"
                             } else {
                                 "Tap to enable scheduled dose chimes"
                             },
@@ -254,12 +270,13 @@ fun TodayScreen(
                 }
             }
         } else {
-            items(scheduledDoses, key = { "${it.medication.id}_${it.scheduledTime}" }) { item ->
+            items(scheduledDoses, key = { "${it.medication.id}_${it.originalScheduledTime}" }) { item ->
                 DoseCard(
                     item = item,
                     onTake = { viewModel.takeDose(item.medication.id, item.scheduledTime) },
                     onSkip = { skippingItem = item },
-                    onUndo = { logId -> viewModel.undoDoseLog(logId) }
+                    onUndo = { logId -> viewModel.undoDoseLog(logId) },
+                    onReschedule = { reschedulingItem = item }
                 )
             }
         }
@@ -380,6 +397,42 @@ fun TodayScreen(
                 TextButton(onClick = { takingPrnMed = null }) {
                     Text("Cancel")
                 }
+            }
+        )
+    }
+
+    // Reschedule / Manual Snooze Dialog for Today's Dose
+    reschedulingItem?.let { item ->
+        val context = LocalContext.current
+        RescheduleDoseDialog(
+            item = item,
+            onDismiss = { reschedulingItem = null },
+            onConfirmReschedule = { newTime ->
+                viewModel.rescheduleDoseForDay(
+                    medicationId = item.medication.id,
+                    originalTime = item.originalScheduledTime,
+                    newTime = newTime,
+                    dayKey = selectedDateKey
+                )
+                Toast.makeText(
+                    context,
+                    "⏰ ${item.medication.name} pushed to ${TimePickerHelper.formatDisplayTime(newTime)} for today only",
+                    Toast.LENGTH_LONG
+                ).show()
+                reschedulingItem = null
+            },
+            onResetOriginal = {
+                viewModel.resetRescheduledDose(
+                    medicationId = item.medication.id,
+                    originalTime = item.originalScheduledTime,
+                    dayKey = selectedDateKey
+                )
+                Toast.makeText(
+                    context,
+                    "↩️ Restored ${item.medication.name} to regular ${TimePickerHelper.formatDisplayTime(item.originalScheduledTime)} schedule",
+                    Toast.LENGTH_SHORT
+                ).show()
+                reschedulingItem = null
             }
         )
     }

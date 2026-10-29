@@ -7,48 +7,41 @@ import android.content.Context
 import android.content.Intent
 import android.media.AudioAttributes
 import android.media.RingtoneManager
+import android.net.Uri
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.example.pressdaily.MainActivity
 import com.example.pressdaily.R
+import com.example.pressdaily.data.model.AlarmSoundOption
+import com.example.pressdaily.data.model.SoundType
+import com.example.pressdaily.ui.alarm.FullScreenAlarmActivity
 
 object NotificationHelper {
-    const val CHANNEL_ID = "pressdaily_dose_reminders"
-    const val CHANNEL_NAME = "PressDaily Dose Reminders"
-    const val NOTIFICATION_ID = 1001
+    const val DEFAULT_NOTIFICATION_ID = 1001
 
+    const val ACTION_TAKE_NOW = "com.example.pressdaily.ACTION_TAKE_NOW"
+    const val ACTION_TAKEN = "com.example.pressdaily.ACTION_TAKEN"
     const val ACTION_TAKE_DOSE = "com.example.pressdaily.ACTION_TAKE_DOSE"
     const val ACTION_SNOOZE = "com.example.pressdaily.ACTION_SNOOZE"
     const val EXTRA_MED_ID = "extra_med_id"
     const val EXTRA_MED_NAME = "extra_med_name"
     const val EXTRA_TIME = "extra_time"
 
-    fun createNotificationChannel(context: Context) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val audioAttributes = AudioAttributes.Builder()
-                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                .setUsage(AudioAttributes.USAGE_ALARM)
-                .build()
+    fun getNotificationId(medicationId: String, scheduledTime: String): Int {
+        val timeParts = scheduledTime.split(":")
+        val h = timeParts.getOrNull(0)?.toIntOrNull() ?: 0
+        val m = timeParts.getOrNull(1)?.toIntOrNull() ?: 0
+        val idHash = (medicationId.hashCode() and 0x3FFF)
+        return 10000 + (idHash * 10) + ((h * 60 + m) % 10)
+    }
 
-            val defaultSoundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+    fun getChannelId(sound: AlarmSoundOption): String {
+        return "pressdaily_reminder_${sound.name.lowercase()}"
+    }
 
-            val channel = NotificationChannel(
-                CHANNEL_ID,
-                CHANNEL_NAME,
-                NotificationManager.IMPORTANCE_HIGH
-            ).apply {
-                description = "Urgent dose reminders, alarms, and scheduled medication alerts"
-                enableLights(true)
-                enableVibration(true)
-                setSound(defaultSoundUri, audioAttributes)
-                lockscreenVisibility = NotificationCompat.VISIBILITY_PUBLIC
-            }
-
-            val notificationManager =
-                context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            notificationManager.createNotificationChannel(channel)
-        }
+    fun createNotificationChannel(context: Context, sound: AlarmSoundOption = RingtonePreferences.getSavedRingtone(context)) {
+        RingtonePreferences.applyRingtoneToNotificationChannel(context, sound)
     }
 
     fun showDoseNotification(
@@ -58,9 +51,29 @@ object NotificationHelper {
         dosage: String,
         scheduledTime: String,
         instructions: String = "",
-        remainingSupply: Int = 0
+        remainingSupply: Int = 0,
+        alarmSound: AlarmSoundOption = RingtonePreferences.getSavedRingtone(context)
     ) {
-        createNotificationChannel(context)
+        val channelId = RingtonePreferences.applyRingtoneToNotificationChannel(context, alarmSound)
+        val notificationId = getNotificationId(medicationId, scheduledTime)
+
+        // Activity-based Full Screen Intent pointing to FullScreenAlarmActivity
+        val fullScreenIntent = Intent(context, FullScreenAlarmActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            putExtra(FullScreenAlarmActivity.EXTRA_MED_ID, medicationId)
+            putExtra(FullScreenAlarmActivity.EXTRA_MED_NAME, medicationName)
+            putExtra(FullScreenAlarmActivity.EXTRA_DOSAGE, dosage)
+            putExtra(FullScreenAlarmActivity.EXTRA_TIME, scheduledTime)
+            putExtra(FullScreenAlarmActivity.EXTRA_INSTRUCTIONS, instructions)
+            putExtra(FullScreenAlarmActivity.EXTRA_REMAINING_SUPPLY, remainingSupply)
+            putExtra(FullScreenAlarmActivity.EXTRA_SOUND_NAME, alarmSound.name)
+        }
+        val fullScreenPendingIntent = PendingIntent.getActivity(
+            context,
+            notificationId * 10 + 4,
+            fullScreenIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
 
         // Intent to open app when tapping notification body
         val openAppIntent = Intent(context, MainActivity::class.java).apply {
@@ -69,26 +82,40 @@ object NotificationHelper {
         }
         val openAppPendingIntent = PendingIntent.getActivity(
             context,
-            0,
+            notificationId * 10 + 5,
             openAppIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        // Action 1: Take Dose directly from notification shade
-        val takeIntent = Intent(context, NotificationActionReceiver::class.java).apply {
-            action = ACTION_TAKE_DOSE
+        // Intent for "Take Now" action button
+        val takeNowIntent = Intent(context, NotificationActionReceiver::class.java).apply {
+            action = ACTION_TAKE_NOW
             putExtra(EXTRA_MED_ID, medicationId)
             putExtra(EXTRA_MED_NAME, medicationName)
             putExtra(EXTRA_TIME, scheduledTime)
         }
-        val takePendingIntent = PendingIntent.getBroadcast(
+        val takeNowPendingIntent = PendingIntent.getBroadcast(
             context,
-            1,
-            takeIntent,
+            notificationId * 10 + 1,
+            takeNowIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        // Action 2: Snooze 10 minutes
+        // Intent for "Taken" action button
+        val takenIntent = Intent(context, NotificationActionReceiver::class.java).apply {
+            action = ACTION_TAKEN
+            putExtra(EXTRA_MED_ID, medicationId)
+            putExtra(EXTRA_MED_NAME, medicationName)
+            putExtra(EXTRA_TIME, scheduledTime)
+        }
+        val takenPendingIntent = PendingIntent.getBroadcast(
+            context,
+            notificationId * 10 + 2,
+            takenIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        // Intent for "Snooze" action button
         val snoozeIntent = Intent(context, NotificationActionReceiver::class.java).apply {
             action = ACTION_SNOOZE
             putExtra(EXTRA_MED_ID, medicationId)
@@ -97,7 +124,7 @@ object NotificationHelper {
         }
         val snoozePendingIntent = PendingIntent.getBroadcast(
             context,
-            2,
+            notificationId * 10 + 3,
             snoozeIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
@@ -108,7 +135,7 @@ object NotificationHelper {
             if (remainingSupply > 0) append(" ($remainingSupply doses left)")
         }
 
-        val builder = NotificationCompat.Builder(context, CHANNEL_ID)
+        val builder = NotificationCompat.Builder(context, channelId)
             .setSmallIcon(R.mipmap.ic_launcher)
             .setContentTitle("⏰ Time for $medicationName ($dosage)")
             .setContentText(contentText)
@@ -116,12 +143,19 @@ object NotificationHelper {
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setCategory(NotificationCompat.CATEGORY_ALARM)
             .setContentIntent(openAppPendingIntent)
+            .setFullScreenIntent(fullScreenPendingIntent, true)
             .setAutoCancel(true)
-            .setDefaults(NotificationCompat.DEFAULT_ALL)
+            .setOngoing(true) // Keeps notification visible until Taken, Snoozed, or Cancelled
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .addAction(
                 android.R.drawable.ic_menu_agenda,
-                "✅ Take Dose",
-                takePendingIntent
+                "💊 Take Now",
+                takeNowPendingIntent
+            )
+            .addAction(
+                android.R.drawable.checkbox_on_background,
+                "✅ Taken",
+                takenPendingIntent
             )
             .addAction(
                 android.R.drawable.ic_popup_reminder,
@@ -130,15 +164,20 @@ object NotificationHelper {
             )
 
         try {
-            val manager = NotificationManagerCompat.from(context)
-            manager.notify(NOTIFICATION_ID, builder.build())
-        } catch (_: SecurityException) {
-            // Handled when notification permission is denied
-        }
+            val notificationManager = NotificationManagerCompat.from(context)
+            notificationManager.notify(notificationId, builder.build())
+        } catch (_: SecurityException) {}
     }
 
-    fun cancelNotification(context: Context) {
-        val manager = NotificationManagerCompat.from(context)
-        manager.cancel(NOTIFICATION_ID)
+    fun cancelNotification(context: Context, medicationId: String? = null, scheduledTime: String? = null) {
+        try {
+            val notificationManager = NotificationManagerCompat.from(context)
+            if (medicationId != null && scheduledTime != null) {
+                notificationManager.cancel(getNotificationId(medicationId, scheduledTime))
+            } else {
+                notificationManager.cancel(DEFAULT_NOTIFICATION_ID)
+                notificationManager.cancelAll()
+            }
+        } catch (_: Exception) {}
     }
 }

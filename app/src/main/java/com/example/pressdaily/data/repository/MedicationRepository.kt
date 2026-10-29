@@ -9,6 +9,7 @@ import com.example.pressdaily.data.model.FoodInstruction
 import com.example.pressdaily.data.model.FrequencyType
 import com.example.pressdaily.data.model.Medication
 import com.example.pressdaily.data.model.MedicationForm
+import com.example.pressdaily.notification.MedicationScheduler
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -20,6 +21,7 @@ import java.util.Locale
 import java.util.UUID
 
 class MedicationRepository(context: Context) {
+    private val appContext = context.applicationContext
     private val prefs: SharedPreferences =
         context.getSharedPreferences("pressdaily_prefs", Context.MODE_PRIVATE)
 
@@ -28,6 +30,9 @@ class MedicationRepository(context: Context) {
 
     private val _doseLogs = MutableStateFlow<List<DoseLog>>(emptyList())
     val doseLogs: StateFlow<List<DoseLog>> = _doseLogs.asStateFlow()
+
+    private val _rescheduledDoses = MutableStateFlow<Map<String, String>>(emptyMap())
+    val rescheduledDoses: StateFlow<Map<String, String>> = _rescheduledDoses.asStateFlow()
 
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
 
@@ -80,6 +85,71 @@ class MedicationRepository(context: Context) {
             _doseLogs.value = initialLogs
             saveDoseLogs(initialLogs)
         }
+
+        val rescheduledJson = prefs.getString("rescheduled_doses_json", null)
+        if (rescheduledJson != null) {
+            _rescheduledDoses.value = parseRescheduledDoses(rescheduledJson)
+        }
+    }
+
+    private fun parseRescheduledDoses(jsonStr: String): Map<String, String> {
+        val map = mutableMapOf<String, String>()
+        try {
+            val json = JSONObject(jsonStr)
+            val keys = json.keys()
+            while (keys.hasNext()) {
+                val key = keys.next()
+                map[key] = json.getString(key)
+            }
+        } catch (_: Exception) {}
+        return map
+    }
+
+    private fun saveRescheduledDoses(map: Map<String, String>) {
+        try {
+            val json = JSONObject()
+            map.forEach { (k, v) -> json.put(k, v) }
+            prefs.edit().putString("rescheduled_doses_json", json.toString()).commit()
+        } catch (_: Exception) {}
+    }
+
+    fun rescheduleDoseForDay(
+        medicationId: String,
+        originalTime: String,
+        newTime: String,
+        dayKey: String = getTodayKey()
+    ) {
+        val current = _rescheduledDoses.value.toMutableMap()
+        current["${dayKey}_${medicationId}_${originalTime}"] = newTime
+        _rescheduledDoses.value = current
+        saveRescheduledDoses(current)
+
+        if (dayKey == getTodayKey()) {
+            MedicationScheduler.scheduleAllAlarms(appContext)
+        }
+    }
+
+    fun resetRescheduledDose(
+        medicationId: String,
+        originalTime: String,
+        dayKey: String = getTodayKey()
+    ) {
+        val current = _rescheduledDoses.value.toMutableMap()
+        current.remove("${dayKey}_${medicationId}_${originalTime}")
+        _rescheduledDoses.value = current
+        saveRescheduledDoses(current)
+
+        if (dayKey == getTodayKey()) {
+            MedicationScheduler.scheduleAllAlarms(appContext)
+        }
+    }
+
+    fun getRescheduledTime(
+        medicationId: String,
+        originalTime: String,
+        dayKey: String = getTodayKey()
+    ): String? {
+        return _rescheduledDoses.value["${dayKey}_${medicationId}_${originalTime}"]
     }
 
     private fun createInitialSeedMedications(): List<Medication> {
@@ -172,6 +242,7 @@ class MedicationRepository(context: Context) {
         }
         _medications.value = updated
         saveMedications(updated)
+        MedicationScheduler.scheduleAllAlarms(appContext)
     }
 
     fun updateMedication(med: Medication) {
@@ -182,6 +253,7 @@ class MedicationRepository(context: Context) {
         val updated = _medications.value.filter { it.id != id }
         _medications.value = updated
         saveMedications(updated)
+        MedicationScheduler.scheduleAllAlarms(appContext)
     }
 
     fun logDose(

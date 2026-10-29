@@ -26,7 +26,6 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.filled.Medication
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.AlertDialog
@@ -165,20 +164,20 @@ fun PulseHistoryScreen(
                                     .background(PulseCoral.copy(alpha = 0.15f), CircleShape),
                                 contentAlignment = Alignment.Center
                             ) {
-                                Icon(Icons.Default.LocalFireDepartment, contentDescription = null, tint = PulseCoral, modifier = Modifier.size(18.dp))
+                                Icon(Icons.Default.Medication, contentDescription = null, tint = PulseCoral, modifier = Modifier.size(18.dp))
                             }
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text("Streak", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("Doses Logged", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            text = "${stats.currentStreakDays} days",
+                            text = "${logs.size}",
                             fontSize = 24.sp,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
-                            text = "Consistent tracking",
+                            text = "Total activity records",
                             fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )

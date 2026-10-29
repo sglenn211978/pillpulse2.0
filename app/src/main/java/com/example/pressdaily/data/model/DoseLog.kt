@@ -21,7 +21,9 @@ data class ScheduledDoseItem(
     val medication: Medication,
     val scheduledTime: String,
     val status: DoseStatus?, // null if pending
-    val logId: String? = null
+    val logId: String? = null,
+    val originalScheduledTime: String = scheduledTime,
+    val isRescheduledForToday: Boolean = false
 )
 
 data class AdherenceStats(

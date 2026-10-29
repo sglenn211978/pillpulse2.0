@@ -1,19 +1,18 @@
 package com.example.pressdaily.data.repository
 
 import android.content.Context
+import android.content.Intent
 import android.content.SharedPreferences
-import android.media.AudioManager
-import android.media.ToneGenerator
-import android.os.Build
-import android.os.VibrationEffect
-import android.os.Vibrator
-import android.os.VibratorManager
 import com.example.pressdaily.data.model.AccentTheme
 import com.example.pressdaily.data.model.AlarmSoundOption
 import com.example.pressdaily.data.model.AppSettings
 import com.example.pressdaily.data.model.NotificationStyle
 import com.example.pressdaily.data.model.ThemeMode
+import com.example.pressdaily.notification.MedicationScheduler
 import com.example.pressdaily.notification.NotificationHelper
+import com.example.pressdaily.notification.PressDailySoundManager
+import com.example.pressdaily.notification.RingtonePreferences
+import com.example.pressdaily.ui.alarm.FullScreenAlarmActivity
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -25,20 +24,15 @@ class SettingsRepository(private val context: Context) {
     private val _settings = MutableStateFlow(loadSettings())
     val settings: StateFlow<AppSettings> = _settings.asStateFlow()
 
-    private var toneGenerator: ToneGenerator? = null
-
     init {
-        try {
-            toneGenerator = ToneGenerator(AudioManager.STREAM_NOTIFICATION, 90)
-        } catch (_: Exception) {
-            toneGenerator = null
-        }
+        // Ensure the saved ringtone is applied to the system NotificationChannel on initialization
+        RingtonePreferences.applyRingtoneToNotificationChannel(context, _settings.value.alarmSound)
     }
 
     private fun loadSettings(): AppSettings {
         val themeModeStr = prefs.getString("theme_mode", ThemeMode.SYSTEM.name) ?: ThemeMode.SYSTEM.name
         val accentStr = prefs.getString("accent_theme", AccentTheme.TEAL.name) ?: AccentTheme.TEAL.name
-        val soundStr = prefs.getString("alarm_sound", AlarmSoundOption.GENTLE_CHIME.name) ?: AlarmSoundOption.GENTLE_CHIME.name
+        val sound = RingtonePreferences.getSavedRingtone(context)
         val styleStr = prefs.getString("notification_style", NotificationStyle.BOTH.name) ?: NotificationStyle.BOTH.name
 
         return AppSettings(
@@ -48,7 +42,7 @@ class SettingsRepository(private val context: Context) {
             highLegibility = prefs.getBoolean("high_legibility", false),
             alarmsEnabled = prefs.getBoolean("alarms_enabled", true),
             notificationStyle = runCatching { NotificationStyle.valueOf(styleStr) }.getOrDefault(NotificationStyle.BOTH),
-            alarmSound = runCatching { AlarmSoundOption.valueOf(soundStr) }.getOrDefault(AlarmSoundOption.GENTLE_CHIME),
+            alarmSound = sound,
             vibrateOnAlarm = prefs.getBoolean("vibrate_on_alarm", true),
             advanceNoticeMinutes = prefs.getInt("advance_notice_min", 0),
             snoozeDurationMinutes = prefs.getInt("snooze_duration_min", 10),
@@ -61,6 +55,11 @@ class SettingsRepository(private val context: Context) {
 
     fun updateSettings(newSettings: AppSettings) {
         _settings.value = newSettings
+
+        // Persist ringtone choice in SharedPreferences and apply immediately to system notification channel
+        RingtonePreferences.saveAndApplyRingtone(context, newSettings.alarmSound)
+
+        // Use commit() to guarantee synchronous persistence to disk across restarts
         prefs.edit()
             .putString("theme_mode", newSettings.themeMode.name)
             .putBoolean("dynamic_color", newSettings.dynamicColor)
@@ -76,18 +75,18 @@ class SettingsRepository(private val context: Context) {
             .putBoolean("quiet_hours_enabled", newSettings.quietHoursEnabled)
             .putString("quiet_hours_start", newSettings.quietHoursStart)
             .putString("quiet_hours_end", newSettings.quietHoursEnd)
-            .apply()
+            .commit()
+
+        // Reschedule alarms with updated settings (e.g. advance notice, quiet hours, alarms enabled)
+        MedicationScheduler.scheduleAllAlarms(context)
     }
 
     fun playSoundPreview(sound: AlarmSoundOption) {
-        if (sound.toneId >= 0) {
-            try {
-                toneGenerator?.startTone(sound.toneId, 400)
-            } catch (_: Exception) {}
-        }
-        if (_settings.value.vibrateOnAlarm || sound == AlarmSoundOption.VIBRATE_ONLY) {
-            vibrateDevice()
-        }
+        PressDailySoundManager.playPreview(context, sound)
+    }
+
+    fun stopSoundPreview() {
+        PressDailySoundManager.stopSound()
     }
 
     fun triggerLiveDoseAlert(
@@ -97,37 +96,31 @@ class SettingsRepository(private val context: Context) {
         instructions: String = "Take with food and a full glass of water",
         remainingSupply: Int = 22
     ) {
-        val style = _settings.value.notificationStyle
-        if (style == NotificationStyle.BOTH || style == NotificationStyle.HEADS_UP) {
-            NotificationHelper.showDoseNotification(
-                context = context,
-                medicationId = "med_lisinopril",
-                medicationName = medicationName,
-                dosage = dosage,
-                scheduledTime = time,
-                instructions = instructions,
-                remainingSupply = remainingSupply
-            )
+        val current = _settings.value
+
+        // Post notification with Activity-based full screen intent
+        NotificationHelper.showDoseNotification(
+            context = context,
+            medicationId = "med_lisinopril",
+            medicationName = medicationName,
+            dosage = dosage,
+            scheduledTime = time,
+            instructions = instructions,
+            remainingSupply = remainingSupply,
+            alarmSound = current.alarmSound
+        )
+
+        // Launch full-screen alarm activity directly
+        val alarmIntent = Intent(context, FullScreenAlarmActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            putExtra(FullScreenAlarmActivity.EXTRA_MED_ID, "med_lisinopril")
+            putExtra(FullScreenAlarmActivity.EXTRA_MED_NAME, medicationName)
+            putExtra(FullScreenAlarmActivity.EXTRA_DOSAGE, dosage)
+            putExtra(FullScreenAlarmActivity.EXTRA_TIME, time)
+            putExtra(FullScreenAlarmActivity.EXTRA_INSTRUCTIONS, instructions)
+            putExtra(FullScreenAlarmActivity.EXTRA_REMAINING_SUPPLY, remainingSupply)
+            putExtra(FullScreenAlarmActivity.EXTRA_SOUND_NAME, current.alarmSound.name)
         }
-        playSoundPreview(_settings.value.alarmSound)
-    }
-
-    private fun vibrateDevice() {
-        try {
-            val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                val vibratorManager = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
-                vibratorManager?.defaultVibrator
-            } else {
-                @Suppress("DEPRECATION")
-                context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
-            }
-
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                vibrator?.vibrate(VibrationEffect.createOneShot(250, VibrationEffect.DEFAULT_AMPLITUDE))
-            } else {
-                @Suppress("DEPRECATION")
-                vibrator?.vibrate(250)
-            }
-        } catch (_: Exception) {}
+        context.startActivity(alarmIntent)
     }
 }
